@@ -1,34 +1,56 @@
-name: Update Weather
+name: Update Weather for Korean Cities
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # 10분마다 실행
-  workflow_dispatch:          # 수동 실행도 가능
+    - cron: "*/10 * * * *"  # 10분마다 갱신
+  workflow_dispatch:
 
 jobs:
-  build:
+  update:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
       - name: Install jq
-        run: sudo apt-get install -y jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Get Seoul weather and update file
+      - name: Ensure cities directory exists
+        run: mkdir -p cities
+
+      - name: Update weather files
+        env:
+          APIKEY: ${{ secrets.OPENWEATHER_APIKEY }}
         run: |
-          CITY="Seoul"
-          APIKEY="5954fc895aad795b708f0e2665c7403e"
-          DATA=$(curl -s "https://api.openweathermap.org/data/2.5/weather?q=$CITY&units=metric&lang=kr&appid=$APIKEY")
-          TEMP=$(echo $DATA | jq '.main.temp' | xargs printf "%.0f")
-          DESC=$(echo $DATA | jq -r '.weather[0].description')
-          HUM=$(echo $DATA | jq '.main.humidity')
-          echo "서울 날씨: ${DESC}, ${TEMP}°C, 습도 ${HUM}%" > weather.txt
+          echo "준비중..." > cities/.placeholder
+          while IFS= read -r CITY || [ -n "$CITY" ]; do
+            if [ -z "$CITY" ]; then continue; fi
 
-      - name: Commit and push
+            # URL 인코딩
+            ENCODED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$CITY")
+
+            # API 호출
+            DATA=$(curl -s "https://api.openweathermap.org/data/2.5/weather?q=$ENCODED&units=metric&lang=kr&appid=$APIKEY")
+
+            # 실패 처리
+            CODE=$(echo "$DATA" | jq -r '.cod // empty')
+            if [ "$CODE" = "401" ] || [ "$CODE" = "404" ]; then
+              echo "$CITY: 준비중..." > "cities/$CITY.txt"
+              continue
+            fi
+
+            TEMP=$(echo "$DATA" | jq '.main.temp' | xargs printf "%.0f")
+            DESC=$(echo "$DATA" | jq -r '.weather[0].description')
+            HUM=$(echo "$DATA" | jq '.main.humidity')
+            WIND=$(echo "$DATA" | jq '.wind.speed')
+
+            echo "${CITY} 날씨: ${DESC}, ${TEMP}°C, 습도 ${HUM}%, 풍속 ${WIND}m/s" > "cities/$CITY.txt"
+          done < cities.txt
+
+      - name: Commit changed files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add weather.txt
+          git add cities/*.txt || true
           git diff --cached --quiet && echo "No changes to commit" && exit 0
-          git commit -m "Update weather"
+          git commit -m "Update city weather" || exit 0
           git push
