@@ -2,7 +2,7 @@ name: Update Weather for Korean Cities
 
 on:
   schedule:
-    - cron: "*/10 * * * *"  # 10분마다 갱신
+    - cron: "*/10 * * * *"  # 10분마다
   workflow_dispatch:
 
 jobs:
@@ -22,19 +22,32 @@ jobs:
           APIKEY: ${{ secrets.OPENWEATHER_APIKEY }}
         run: |
           echo "준비중..." > cities/.placeholder
-          while IFS= read -r CITY || [ -n "$CITY" ]; do
-            if [ -z "$CITY" ]; then continue; fi
+
+          if [ ! -f cities.txt ]; then
+            echo "cities.txt 파일이 없습니다."
+            exit 1
+          fi
+
+          while IFS= read -r LINE || [ -n "$LINE" ]; do
+            # 빈 줄은 건너뜀
+            if [ -z "$LINE" ]; then continue; fi
+
+            # 한글:영문 분리
+            CITY_HANGUL=$(echo "$LINE" | cut -d':' -f1)
+            CITY_EN=$(echo "$LINE" | cut -d':' -f2)
+
+            if [ -z "$CITY_HANGUL" ] || [ -z "$CITY_EN" ]; then continue; fi
 
             # URL 인코딩
-            ENCODED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$CITY")
+            ENCODED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$CITY_EN")
 
             # API 호출
             DATA=$(curl -s "https://api.openweathermap.org/data/2.5/weather?q=$ENCODED&units=metric&lang=kr&appid=$APIKEY")
 
-            # 실패 처리
+            # 오류 처리
             CODE=$(echo "$DATA" | jq -r '.cod // empty')
             if [ "$CODE" = "401" ] || [ "$CODE" = "404" ]; then
-              echo "$CITY: 준비중..." > "cities/$CITY.txt"
+              echo "$CITY_HANGUL: 준비중..." > "cities/$CITY_HANGUL.txt"
               continue
             fi
 
@@ -43,7 +56,7 @@ jobs:
             HUM=$(echo "$DATA" | jq '.main.humidity')
             WIND=$(echo "$DATA" | jq '.wind.speed')
 
-            echo "${CITY} 날씨: ${DESC}, ${TEMP}°C, 습도 ${HUM}%, 풍속 ${WIND}m/s" > "cities/$CITY.txt"
+            echo "${CITY_HANGUL} 날씨: ${DESC}, ${TEMP}°C, 습도 ${HUM}%, 풍속 ${WIND}m/s" > "cities/$CITY_HANGUL.txt"
           done < cities.txt
 
       - name: Commit changed files
