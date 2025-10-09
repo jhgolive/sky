@@ -99,3 +99,9 @@
 영양:Yeongyang
 봉화:Bonghwa
 울릉:Ulleung
+과천:Gwacheon
+부안:Buan
+안동:Andong
+군산:Gunsan
+서천:Seocheon
+경산:Gyeongsan
