@@ -110,11 +110,5 @@
 연수:Yeonsu
 동래:Dongnae
 금정:Geumjeong
-제천:Jecheon
 영월:Yeongwol
-삼척:Samcheok
-태안:Taean
-홍성:Hongseong
-보령:Boryeong
 진해:Jinhae
-사천:Sacheon
